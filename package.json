@@ -1,0 +1,15 @@
+﻿{
+  "name": "payrolleazy-supabase-cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:smoke && npm run test:pgtap && npm run test:gateway && npm run test:certification",
+    "test:smoke": "node scripts/testing/run-smoke.mjs",
+    "test:pgtap": "node scripts/testing/run-pgtap.mjs",
+    "test:gateway": "node scripts/testing/run-gateway.mjs",
+    "test:certification": "node scripts/testing/run-certification.mjs",
+    "test:module": "node scripts/testing/run-certification.mjs",
+    "test:load": "node scripts/testing/run-load.mjs"
+  }
+}

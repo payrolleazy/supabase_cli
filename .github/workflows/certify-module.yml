@@ -1,0 +1,38 @@
+﻿name: Certify Module
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_code:
+        description: Module code to certify, for example F01
+        required: true
+        type: string
+
+jobs:
+  certify-module:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install repo tooling
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Reset local database from checked-in migrations
+        run: supabase db reset
+
+      - name: Run module certification
+        run: npm run test:module -- --module "${{ inputs.module_code }}"

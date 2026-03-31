@@ -1,0 +1,19 @@
+﻿{
+  "suite_code": "shared-local-health",
+  "module_code": "shared",
+  "description": "Validates that the shared local gateway routes are responding before module-specific cases run.",
+  "cases": [
+    {
+      "case_id": "rest-root-openapi",
+      "method": "GET",
+      "url": "{{REST_URL}}/",
+      "expect_status": 200
+    },
+    {
+      "case_id": "auth-settings",
+      "method": "GET",
+      "url": "{{API_URL}}/auth/v1/settings",
+      "expect_status": 200
+    }
+  ]
+}

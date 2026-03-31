@@ -1,0 +1,239 @@
+create table if not exists public.platform_billing_cycle (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.platform_tenant(tenant_id) on delete cascade,
+  subscription_id uuid not null references public.platform_tenant_subscription(id) on delete restrict,
+  cycle_start date not null,
+  cycle_end date not null,
+  invoice_due_date date not null,
+  cycle_status text not null default 'open' check (cycle_status in ('open', 'invoiced', 'partially_paid', 'paid', 'overdue', 'void')),
+  currency_code text not null default 'INR',
+  subtotal_amount numeric(18,2) not null default 0,
+  total_amount numeric(18,2) not null default 0,
+  paid_amount numeric(18,2) not null default 0,
+  balance_amount numeric(18,2) not null default 0,
+  opened_at timestamptz not null default timezone('utc', now()),
+  closed_at timestamptz null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint platform_billing_cycle_window_chk check (cycle_end >= cycle_start),
+  constraint platform_billing_cycle_unique unique (tenant_id, cycle_start, cycle_end)
+);
+
+create index if not exists idx_platform_billing_cycle_tenant_status
+on public.platform_billing_cycle (tenant_id, cycle_status, cycle_end desc);
+
+alter table public.platform_billing_cycle enable row level security;
+
+drop policy if exists platform_billing_cycle_service_role_all on public.platform_billing_cycle;
+create policy platform_billing_cycle_service_role_all
+on public.platform_billing_cycle
+for all
+to service_role
+using (true)
+with check (true);
+
+drop trigger if exists trg_platform_billing_cycle_set_updated_at on public.platform_billing_cycle;
+create trigger trg_platform_billing_cycle_set_updated_at
+before update on public.platform_billing_cycle
+for each row
+execute function public.platform_set_updated_at();
+
+create table if not exists public.platform_invoice (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.platform_tenant(tenant_id) on delete cascade,
+  billing_cycle_id uuid not null unique references public.platform_billing_cycle(id) on delete cascade,
+  invoice_no text not null unique,
+  invoice_status text not null default 'issued' check (invoice_status in ('issued', 'partially_paid', 'paid', 'overdue', 'void')),
+  issue_date date not null,
+  due_date date not null,
+  currency_code text not null default 'INR',
+  subtotal_amount numeric(18,2) not null default 0,
+  total_amount numeric(18,2) not null default 0,
+  paid_amount numeric(18,2) not null default 0,
+  balance_amount numeric(18,2) not null default 0,
+  invoice_payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists idx_platform_invoice_tenant_status_due
+on public.platform_invoice (tenant_id, invoice_status, due_date);
+
+alter table public.platform_invoice enable row level security;
+
+drop policy if exists platform_invoice_service_role_all on public.platform_invoice;
+create policy platform_invoice_service_role_all
+on public.platform_invoice
+for all
+to service_role
+using (true)
+with check (true);
+
+drop trigger if exists trg_platform_invoice_set_updated_at on public.platform_invoice;
+create trigger trg_platform_invoice_set_updated_at
+before update on public.platform_invoice
+for each row
+execute function public.platform_set_updated_at();
+
+create table if not exists public.platform_payment_receipt (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.platform_tenant(tenant_id) on delete cascade,
+  invoice_id uuid null references public.platform_invoice(id) on delete set null,
+  provider_code text not null,
+  external_payment_id text not null,
+  amount numeric(18,2) not null check (amount > 0),
+  currency_code text not null default 'INR',
+  receipt_status text not null default 'received' check (receipt_status in ('received', 'applied', 'failed')),
+  paid_at timestamptz not null default timezone('utc', now()),
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint platform_payment_receipt_provider_unique unique (provider_code, external_payment_id)
+);
+
+create index if not exists idx_platform_payment_receipt_tenant_invoice
+on public.platform_payment_receipt (tenant_id, invoice_id, paid_at desc);
+
+alter table public.platform_payment_receipt enable row level security;
+
+drop policy if exists platform_payment_receipt_service_role_all on public.platform_payment_receipt;
+create policy platform_payment_receipt_service_role_all
+on public.platform_payment_receipt
+for all
+to service_role
+using (true)
+with check (true);
+
+create table if not exists public.platform_billable_unit_ledger (
+  id bigint generated by default as identity primary key,
+  tenant_id uuid not null references public.platform_tenant(tenant_id) on delete cascade,
+  metric_code text not null,
+  quantity numeric(18,4) not null check (quantity > 0),
+  unit_price numeric(18,2) not null check (unit_price >= 0),
+  line_amount numeric(18,2) not null check (line_amount >= 0),
+  currency_code text not null default 'INR',
+  source_type text not null,
+  source_id text not null,
+  source_reference jsonb not null default '{}'::jsonb,
+  occurred_on date not null,
+  idempotency_key text not null,
+  billing_cycle_id uuid null references public.platform_billing_cycle(id) on delete set null,
+  invoice_id uuid null references public.platform_invoice(id) on delete set null,
+  reversal_of_id bigint null references public.platform_billable_unit_ledger(id) on delete set null,
+  entry_status text not null default 'recorded' check (entry_status in ('recorded', 'invoiced', 'reversed')),
+  created_by uuid null,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint platform_billable_unit_ledger_tenant_idempotency_unique unique (tenant_id, idempotency_key)
+);
+
+create index if not exists idx_platform_billable_unit_ledger_tenant_metric_date
+on public.platform_billable_unit_ledger (tenant_id, metric_code, occurred_on);
+
+create index if not exists idx_platform_billable_unit_ledger_cycle_invoice
+on public.platform_billable_unit_ledger (billing_cycle_id, invoice_id, entry_status);
+
+alter table public.platform_billable_unit_ledger enable row level security;
+
+drop policy if exists platform_billable_unit_ledger_service_role_all on public.platform_billable_unit_ledger;
+create policy platform_billable_unit_ledger_service_role_all
+on public.platform_billable_unit_ledger
+for all
+to service_role
+using (true)
+with check (true);
+
+create or replace view public.platform_tenant_commercial_state_view as
+with latest_invoice as (
+  select distinct on (pi.tenant_id)
+    pi.tenant_id,
+    pi.id as latest_invoice_id,
+    pi.invoice_no,
+    pi.invoice_status,
+    pi.issue_date,
+    pi.due_date,
+    pi.total_amount,
+    pi.paid_amount,
+    pi.balance_amount
+  from public.platform_invoice pi
+  order by pi.tenant_id, pi.issue_date desc, pi.created_at desc
+)
+select
+  pt.tenant_id,
+  pt.tenant_code,
+  pca.commercial_status,
+  pca.dues_state,
+  pca.overdue_since,
+  pca.dormant_access_from,
+  pca.background_stop_from,
+  pca.last_invoiced_at,
+  pca.last_paid_at,
+  pca.last_state_synced_at,
+  pts.id as subscription_id,
+  pts.subscription_status,
+  pts.cycle_anchor_day,
+  pts.current_cycle_start,
+  pts.current_cycle_end,
+  ppc.id as plan_id,
+  ppc.plan_code,
+  ppc.plan_name,
+  ppc.billing_cadence,
+  ppc.currency_code,
+  li.latest_invoice_id,
+  li.invoice_no as latest_invoice_no,
+  li.invoice_status as latest_invoice_status,
+  li.issue_date as latest_invoice_issue_date,
+  li.due_date as latest_invoice_due_date,
+  li.total_amount as latest_invoice_total_amount,
+  li.paid_amount as latest_invoice_paid_amount,
+  li.balance_amount as latest_invoice_balance_amount
+from public.platform_tenant pt
+left join public.platform_tenant_commercial_account pca
+  on pca.tenant_id = pt.tenant_id
+left join public.platform_tenant_subscription pts
+  on pts.tenant_id = pt.tenant_id
+left join public.platform_plan_catalog ppc
+  on ppc.id = pts.plan_id
+left join latest_invoice li
+  on li.tenant_id = pt.tenant_id;
+
+create or replace function public.platform_get_effective_plan_rate(
+  p_plan_id uuid,
+  p_metric_code text,
+  p_as_of_date date
+)
+returns public.platform_plan_metric_rate
+language plpgsql
+stable
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_rate public.platform_plan_metric_rate%rowtype;
+begin
+  select *
+  into v_rate
+  from public.platform_plan_metric_rate ppmr
+  where ppmr.plan_id = p_plan_id
+    and ppmr.metric_code = p_metric_code
+    and ppmr.effective_from <= p_as_of_date
+    and (ppmr.effective_to is null or ppmr.effective_to >= p_as_of_date)
+  order by ppmr.effective_from desc, ppmr.created_at desc
+  limit 1;
+
+  return v_rate;
+end;
+$function$;
+
+create or replace function public.platform_build_invoice_no(p_issue_date date)
+returns text
+language sql
+volatile
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+  select format(
+    'INV-%s-%s',
+    to_char(coalesce(p_issue_date, current_date), 'YYYYMM'),
+    lpad(nextval('public.platform_invoice_no_seq')::text, 6, '0')
+  );
+$function$;;
