@@ -1,4 +1,4 @@
-﻿import path from "node:path";
+import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileExists, getTestingEnv, listFilesRecursive, printSection, readJson, replaceTokens, repoRoot, runCommand } from "./core.mjs";
 
@@ -10,6 +10,24 @@ async function fetchWithCheck(url, options, expectedStatus) {
     status: response.status,
     body
   };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry({ url, options, expectedStatus, retries = 1, delayMs = 0 }) {
+  let lastResult = null;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    lastResult = await fetchWithCheck(url, options, expectedStatus);
+    if (lastResult.ok) {
+      return lastResult;
+    }
+    if (attempt < retries && delayMs > 0) {
+      await sleep(delayMs);
+    }
+  }
+  return lastResult;
 }
 
 function parseTap(output) {
@@ -31,12 +49,18 @@ export async function runSmokeSuite({ env = getTestingEnv() } = {}) {
   }
 
   const checks = [
-    { label: "Studio", url: env.STUDIO_URL, status: 200 },
-    { label: "REST", url: `${env.REST_URL}/`, status: 200 }
+    { label: "Studio", url: env.STUDIO_URL, status: 200, retries: 15, delayMs: 1000 },
+    { label: "REST", url: `${env.REST_URL}/`, status: 200, retries: 15, delayMs: 1000 }
   ];
 
   for (const check of checks) {
-    const result = await fetchWithCheck(check.url, { method: "GET" }, check.status);
+    const result = await fetchWithRetry({
+      url: check.url,
+      options: { method: "GET" },
+      expectedStatus: check.status,
+      retries: check.retries ?? 1,
+      delayMs: check.delayMs ?? 0
+    });
     if (!result.ok) {
       throw new Error(`${check.label} health check failed with status ${result.status} at ${check.url}`);
     }
@@ -189,3 +213,4 @@ export async function runCertification({ env = getTestingEnv(), moduleCode } = {
     }
   }
 }
+
