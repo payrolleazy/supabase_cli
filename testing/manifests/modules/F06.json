@@ -1,0 +1,29 @@
+{
+  "module_code": "F06",
+  "display_name": "F06 Read Model And Refresh Baseline",
+  "classification": "new_platform_governance_module",
+  "description": "Read-model governance, refresh control, refresh status, and hardened refresh-runtime baseline for the payrolleazy platform.",
+  "suite_order": [
+    {
+      "suite_type": "smoke",
+      "suite_code": "local-stack-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "pgtap",
+      "suite_code": "f06-core",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "shared-local-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "load",
+      "suite_code": "f06-load",
+      "mode": "not_configured",
+      "reason": "Explicit F06 load suites are not authored yet."
+    }
+  ]
+}
