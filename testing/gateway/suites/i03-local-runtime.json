@@ -1,0 +1,110 @@
+{
+  "suite_code": "i03-local-runtime",
+  "module_code": "I03",
+  "description": "Validates the rebuilt I03 application-gateway thread on the local certification stack.",
+  "setup_http": {
+    "method": "POST",
+    "url": "{{API_URL}}/auth/v1/signup",
+    "headers": {
+      "apikey": "{{SUPABASE_ANON_KEY}}",
+      "Authorization": "Bearer {{SUPABASE_ANON_KEY}}"
+    },
+    "body": {
+      "email": "i03.{{RUN_ID}}@example.test",
+      "password": "GatewayPass@12345",
+      "data": {
+        "full_name": "I03 Certification User {{RUN_ID}}"
+      }
+    },
+    "expect_status": 200,
+    "response_tokens": {
+      "I03_ACCESS_TOKEN": "access_token",
+      "I03_USER_ID": "user.id",
+      "I03_EMAIL": "user.email"
+    }
+  },
+  "setup_sql_file": "testing/gateway/fixtures/i03/suite_setup_seed_actor.sql",
+  "teardown_sql_file": "testing/gateway/fixtures/i03/suite_teardown_cleanup.sql",
+  "cases": [
+    {
+      "case_id": "i03-application-gateway-method-not-allowed",
+      "method": "GET",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I03_ACCESS_TOKEN}}"
+      },
+      "expect_status": 405,
+      "expect_contains": "METHOD_NOT_ALLOWED"
+    },
+    {
+      "case_id": "i03-application-gateway-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "body": {
+        "operation_code": "i03_proof_read_actor_access",
+        "route_tenant_id": "{{I03_TENANT_ID}}",
+        "payload": {}
+      },
+      "expect_status": 401
+    },
+    {
+      "case_id": "i03-application-gateway-invalid-jwt",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer not-a-real-jwt"
+      },
+      "body": {
+        "operation_code": "i03_proof_read_actor_access",
+        "route_tenant_id": "{{I03_TENANT_ID}}",
+        "payload": {}
+      },
+      "expect_status": 401
+    },
+    {
+      "case_id": "i03-application-gateway-invalid-request",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I03_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i03_proof_read_actor_access",
+        "route_tenant_id": "not-a-uuid",
+        "payload": {}
+      },
+      "expect_status": 400,
+      "expect_contains": "INVALID_REQUEST"
+    },
+    {
+      "case_id": "i03-application-gateway-operation-not-found",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I03_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i03_unknown_operation",
+        "route_tenant_id": "{{I03_TENANT_ID}}",
+        "payload": {}
+      },
+      "expect_status": 404,
+      "expect_contains": "OPERATION_NOT_FOUND"
+    },
+    {
+      "case_id": "i03-application-gateway-read-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I03_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i03_proof_read_actor_access",
+        "route_tenant_id": "{{I03_TENANT_ID}}",
+        "payload": {}
+      },
+      "expect_status": 200,
+      "expect_contains": "\"operation_code\":\"i03_proof_read_actor_access\""
+    }
+  ]
+}

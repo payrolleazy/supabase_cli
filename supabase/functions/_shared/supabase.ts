@@ -27,6 +27,17 @@ export function createServiceRoleClient(): SupabaseClient {
   );
 }
 
+
+export function createUserClient(accessToken: string): SupabaseClient {
+  return createClient(
+    requireEnv("SUPABASE_URL"),
+    requireEnv("SUPABASE_ANON_KEY"),
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    },
+  );
+}
 export function createAuthedClient(authHeader: string): SupabaseClient {
   return createClient(
     requireEnv("SUPABASE_URL"),
@@ -64,3 +75,4 @@ export async function safeDeleteAuthUser(client: SupabaseClient, userId: string)
     return false;
   }
 }
+

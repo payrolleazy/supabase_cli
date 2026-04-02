@@ -1,4 +1,4 @@
-﻿import { spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -31,7 +31,12 @@ export function getTestingEnv() {
     REST_URL: process.env.REST_URL ?? envFileValues.REST_URL ?? "http://127.0.0.1:54321/rest/v1",
     FUNCTIONS_URL: process.env.FUNCTIONS_URL ?? envFileValues.FUNCTIONS_URL ?? "http://127.0.0.1:54321/functions/v1",
     STUDIO_URL: process.env.STUDIO_URL ?? envFileValues.STUDIO_URL ?? "http://127.0.0.1:54323",
-    LOCAL_DB_CONTAINER: process.env.LOCAL_DB_CONTAINER ?? envFileValues.LOCAL_DB_CONTAINER ?? "supabase_db_payrolleazy-localtest"
+    LOCAL_DB_CONTAINER: process.env.LOCAL_DB_CONTAINER ?? envFileValues.LOCAL_DB_CONTAINER ?? "supabase_db_payrolleazy-localtest",
+    LOCAL_FUNCTIONS_ENV_PATH:
+      process.env.LOCAL_FUNCTIONS_ENV_PATH ??
+      envFileValues.LOCAL_FUNCTIONS_ENV_PATH ??
+      path.join(repoRoot, "supabase", "functions", ".env.local"),
+    RUN_ID: process.env.RUN_ID ?? envFileValues.RUN_ID ?? `${Date.now()}`
   };
 }
 

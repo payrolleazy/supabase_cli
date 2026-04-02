@@ -1,0 +1,34 @@
+{
+  "module_code": "I03",
+  "display_name": "I03 Unified Application Gateway",
+  "classification": "new_platform_control_plane_module",
+  "description": "Unified application-gateway control plane, retention lifecycle, observability read models, and guarded authenticated dispatch runtime.",
+  "suite_order": [
+    {
+      "suite_type": "smoke",
+      "suite_code": "local-stack-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "pgtap",
+      "suite_code": "i03-core",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "shared-local-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "i03-local-runtime",
+      "mode": "required"
+    },
+    {
+      "suite_type": "load",
+      "suite_code": "i03-load",
+      "mode": "not_configured",
+      "reason": "Explicit I03 load suites are not authored yet."
+    }
+  ]
+}

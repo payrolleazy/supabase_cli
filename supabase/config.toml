@@ -419,3 +419,6 @@ verify_jwt = false
 
 [functions.public-client-purchase-webhook]
 verify_jwt = false
+
+[functions.application-gateway]
+verify_jwt = true

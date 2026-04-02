@@ -134,3 +134,60 @@ export function selectAllowedMembership(
 
   return candidates[0] ?? null;
 }
+
+export type GatewayEnvelope = {
+  success: boolean;
+  operation_code: string;
+  request_id: string;
+  tenant_id: string | null;
+  mode: string | null;
+  data: unknown;
+  error: { code: string; message: string; details: JsonMap } | null;
+  meta: JsonMap;
+};
+
+export function normalizeGatewayResponse(
+  result: PlatformRpcResult,
+  fallback: {
+    operationCode: string;
+    requestId: string;
+    routeTenantId: string | null;
+  },
+): GatewayEnvelope {
+  const details = asObject(result?.details);
+  const success = result?.success === true;
+  const mode = asString(details.mode) || null;
+  const tenantId = asString(details.tenant_id) || fallback.routeTenantId;
+  const operationCode = asString(details.operation_code) || fallback.operationCode;
+  const requestId = asString(details.request_id) || fallback.requestId;
+
+  if (!success) {
+    return {
+      success: false,
+      operation_code: operationCode,
+      request_id: requestId,
+      tenant_id: tenantId,
+      mode,
+      data: null,
+      error: {
+        code: asString(result?.code) || "GATEWAY_REQUEST_FAILED",
+        message: asString(result?.message) || "Gateway request failed.",
+        details,
+      },
+      meta: {},
+    };
+  }
+
+  const { data, ...rest } = details;
+
+  return {
+    success: true,
+    operation_code: operationCode,
+    request_id: requestId,
+    tenant_id: tenantId,
+    mode,
+    data: Object.prototype.hasOwnProperty.call(details, "data") ? data : details,
+    error: null,
+    meta: rest,
+  };
+}

@@ -30,6 +30,41 @@ async function fetchWithRetry({ url, options, expectedStatus, retries = 1, delay
   return lastResult;
 }
 
+function parseEnvContent(content) {
+  const values = {};
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const delimiterIndex = line.indexOf("=");
+    if (delimiterIndex === -1) continue;
+    const key = line.slice(0, delimiterIndex).trim();
+    let value = line.slice(delimiterIndex + 1).trim();
+    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    values[key] = value;
+  }
+  return values;
+}
+
+async function loadFunctionsEnv(context) {
+  const envPath = context.LOCAL_FUNCTIONS_ENV_PATH;
+  if (!envPath || !(await fileExists(envPath))) {
+    return {};
+  }
+  const content = await readFile(envPath, "utf8");
+  return parseEnvContent(content);
+}
+
+function getNestedValue(payload, pathExpression) {
+  return pathExpression.split(".").reduce((current, segment) => {
+    if (current && typeof current === "object" && !Array.isArray(current) && Object.prototype.hasOwnProperty.call(current, segment)) {
+      return current[segment];
+    }
+    return undefined;
+  }, payload);
+}
+
 function parseTap(output) {
   const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const planLine = lines.find((line) => /^1\.\.[0-9]+$/.test(line));
@@ -124,6 +159,59 @@ async function runSqlHook({ env, hook, context, label }) {
   return parseJsonTail(result.stdout, label);
 }
 
+async function runHttpHook({ hook, context, label }) {
+  const hooks = Array.isArray(hook) ? hook : [hook];
+  let accumulated = {};
+
+  for (const currentHook of hooks) {
+    const secretContext = await loadFunctionsEnv({ ...context, ...accumulated });
+    const resolved = replaceTokens(currentHook, { ...context, ...secretContext, ...accumulated });
+    const requestOptions = {
+      method: resolved.method ?? "GET",
+      headers: resolved.headers ?? {},
+    };
+
+    if (resolved.body !== undefined) {
+      requestOptions.body = typeof resolved.body === "string" ? resolved.body : JSON.stringify(resolved.body);
+      if (!requestOptions.headers["Content-Type"]) {
+        requestOptions.headers["Content-Type"] = "application/json";
+      }
+    }
+
+    const response = await fetch(resolved.url, requestOptions);
+    const responseText = await response.text();
+    if (response.status !== resolved.expect_status) {
+      throw new Error(`${label} expected ${resolved.expect_status} but got ${response.status} for ${resolved.url}\n${responseText}`);
+    }
+    if (resolved.expect_contains && !responseText.includes(resolved.expect_contains)) {
+      throw new Error(`${label} did not include expected text '${resolved.expect_contains}'.`);
+    }
+
+    if (resolved.response_tokens) {
+      let parsed = {};
+      if (responseText.trim()) {
+        try {
+          parsed = JSON.parse(responseText);
+        } catch (error) {
+          throw new Error(`${label} response token capture requires a JSON response.\n${responseText}\n${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      for (const [tokenName, tokenPath] of Object.entries(resolved.response_tokens)) {
+        const tokenValue = getNestedValue(parsed, tokenPath);
+        if (tokenValue === undefined || tokenValue === null || tokenValue === "") {
+          throw new Error(`${label} could not resolve response token '${tokenName}' from path '${tokenPath}'.`);
+        }
+        accumulated[tokenName] = typeof tokenValue === "string" ? tokenValue : JSON.stringify(tokenValue);
+      }
+    }
+
+    console.log(`PASS ${label} ${resolved.url} -> ${response.status}`);
+  }
+
+  return accumulated;
+}
+
 export async function runSmokeSuite({ env = getTestingEnv() } = {}) {
   printSection("Smoke");
   const resolvedEnv = await resolveTestingEnv(env);
@@ -185,6 +273,16 @@ export async function runGatewaySuites({ env = getTestingEnv(), suiteCode, modul
   for (const suite of filtered) {
     console.log(`Suite ${suite.suite_code}: ${suite.description}`);
     let suiteContext = { ...resolvedEnv };
+    if (suite.setup_http) {
+      suiteContext = {
+        ...suiteContext,
+        ...(await runHttpHook({
+          hook: suite.setup_http,
+          context: suiteContext,
+          label: `Gateway suite ${suite.suite_code} HTTP setup`,
+        })),
+      };
+    }
     if (suite.setup_sql || suite.setup_sql_file) {
       suiteContext = {
         ...suiteContext,
@@ -200,6 +298,16 @@ export async function runGatewaySuites({ env = getTestingEnv(), suiteCode, modul
     try {
       for (const testCase of suite.cases ?? []) {
         let caseContext = { ...suiteContext };
+        if (testCase.setup_http) {
+          caseContext = {
+            ...caseContext,
+            ...(await runHttpHook({
+              hook: testCase.setup_http,
+              context: caseContext,
+              label: `Gateway case ${testCase.case_id} HTTP setup`,
+            })),
+          };
+        }
         if (testCase.setup_sql || testCase.setup_sql_file) {
           caseContext = {
             ...caseContext,
@@ -242,6 +350,13 @@ export async function runGatewaySuites({ env = getTestingEnv(), suiteCode, modul
               label: `Gateway case ${testCase.case_id} teardown`,
             });
           }
+          if (testCase.teardown_http) {
+            await runHttpHook({
+              hook: testCase.teardown_http,
+              context: caseContext,
+              label: `Gateway case ${testCase.case_id} HTTP teardown`,
+            });
+          }
         }
       }
     } finally {
@@ -251,6 +366,13 @@ export async function runGatewaySuites({ env = getTestingEnv(), suiteCode, modul
           hook: { teardown_sql: suite.teardown_sql, teardown_sql_file: suite.teardown_sql_file },
           context: suiteContext,
           label: `Gateway suite ${suite.suite_code} teardown`,
+        });
+      }
+      if (suite.teardown_http) {
+        await runHttpHook({
+          hook: suite.teardown_http,
+          context: suiteContext,
+          label: `Gateway suite ${suite.suite_code} HTTP teardown`,
         });
       }
     }
