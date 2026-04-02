@@ -38,10 +38,29 @@ export function createAuthedClient(authHeader: string): SupabaseClient {
   );
 }
 
+export function createAnonClient(): SupabaseClient {
+  return createClient(
+    requireEnv("SUPABASE_URL"),
+    requireEnv("SUPABASE_ANON_KEY"),
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+    },
+  );
+}
+
 export async function callPlatformRpc(client: SupabaseClient, functionName: string, params: JsonMap): Promise<PlatformRpcResult> {
   const { data, error } = await client.rpc(functionName, { p_params: params });
   if (error) {
     throw new Error(`${functionName} failed: ${error.message}`);
   }
   return (data ?? {}) as PlatformRpcResult;
+}
+
+export async function safeDeleteAuthUser(client: SupabaseClient, userId: string): Promise<boolean> {
+  try {
+    const { error } = await client.auth.admin.deleteUser(userId);
+    return !error;
+  } catch {
+    return false;
+  }
 }

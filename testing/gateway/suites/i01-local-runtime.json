@@ -1,0 +1,34 @@
+{
+  "suite_code": "i01-local-runtime",
+  "module_code": "I01",
+  "description": "Validates the rebuilt I01 signup-request edge on the local certification stack.",
+  "cases": [
+    {
+      "case_id": "i01-signup-request-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/identity-signup-request",
+      "body": {
+        "email": "not-an-email",
+        "password": "short",
+        "full_name": "A",
+        "mobile_no": "12"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i01-signup-request-accepted",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/identity-signup-request",
+      "body": {
+        "email": "cert.i01.primary@example.test",
+        "password": "Payroll3azy!Pass",
+        "full_name": "I01 Certification User",
+        "mobile_no": "9876543210",
+        "role_code": "employee"
+      },
+      "expect_status": 202,
+      "expect_contains": "status_token"
+    }
+  ]
+}

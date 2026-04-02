@@ -33,6 +33,11 @@ export function jsonResponse(payload: unknown, status = 200, headers?: HeadersIn
 }
 
 export async function readJsonBody(req: Request, maxBodyBytes: number): Promise<unknown> {
+  const contentLength = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
+    throw new EdgeHttpError("Request body is too large.", 413, "BODY_TOO_LARGE");
+  }
+
   const rawBody = await req.text();
   if (rawBody.length > maxBodyBytes) {
     throw new EdgeHttpError("Request body is too large.", 413, "BODY_TOO_LARGE");
@@ -47,6 +52,22 @@ export async function readJsonBody(req: Request, maxBodyBytes: number): Promise<
 
 export function createRequestId(req: Request): string {
   return req.headers.get("x-request-id")?.trim() || crypto.randomUUID();
+}
+
+function firstForwardedValue(value: string | null): string | null {
+  if (!value) return null;
+  return value.split(",")[0]?.trim() || null;
+}
+
+export function getClientMetadata(req: Request): { sourceIp: string; userAgent: string } {
+  return {
+    sourceIp:
+      firstForwardedValue(req.headers.get("cf-connecting-ip")) ||
+      firstForwardedValue(req.headers.get("x-real-ip")) ||
+      firstForwardedValue(req.headers.get("x-forwarded-for")) ||
+      "unknown",
+    userAgent: req.headers.get("user-agent") || "unknown",
+  };
 }
 
 export function logStructured(level: "info" | "warning" | "error", message: string, context: Record<string, unknown> = {}): void {
