@@ -402,3 +402,10 @@ verify_jwt = true
 
 [functions.identity-signup-orchestrator]
 verify_jwt = true
+
+[functions.identity-signup-status]
+verify_jwt = false
+
+[functions.identity-signin]
+verify_jwt = false
+

@@ -1,7 +1,7 @@
 {
   "suite_code": "i01-local-runtime",
   "module_code": "I01",
-  "description": "Validates the rebuilt I01 signup-request edge on the local certification stack.",
+  "description": "Validates the rebuilt I01 public identity edge threads on the local certification stack.",
   "cases": [
     {
       "case_id": "i01-signup-request-validation-error",
@@ -29,6 +29,51 @@
       },
       "expect_status": 202,
       "expect_contains": "status_token"
+    },
+    {
+      "case_id": "i01-signup-status-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/identity-signup-status",
+      "body": {
+        "request_id": "not-a-uuid",
+        "status_token": "short"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i01-signup-status-request-not-found",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/identity-signup-status",
+      "body": {
+        "request_id": "11111111-1111-1111-1111-111111111111",
+        "status_token": "abcdefghijklmnopqrstuvwxyz123456"
+      },
+      "expect_status": 404,
+      "expect_contains": "REQUEST_NOT_FOUND"
+    },
+    {
+      "case_id": "i01-signin-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/identity-signin",
+      "body": {
+        "email": "not-an-email",
+        "password": "x"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i01-signin-invalid-credentials",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/identity-signin",
+      "body": {
+        "email": "nobody@example.test",
+        "password": "WrongPassword123!",
+        "policy_code": "employee_portal"
+      },
+      "expect_status": 401,
+      "expect_contains": "INVALID_CREDENTIALS"
     }
   ]
 }
