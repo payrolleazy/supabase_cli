@@ -1,0 +1,34 @@
+{
+  "module_code": "I02",
+  "display_name": "I02 Client Purchase Provision Bootstrap",
+  "classification": "legacy_reference_runtime_module",
+  "description": "Client purchase, checkout webhook, owner purchase activation, credential bootstrap, and provisioning baseline aligned to the rebuilt payrolleazy onboarding runtime.",
+  "suite_order": [
+    {
+      "suite_type": "smoke",
+      "suite_code": "local-stack-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "pgtap",
+      "suite_code": "i02-core",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "shared-local-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "i02-local-runtime",
+      "mode": "required"
+    },
+    {
+      "suite_type": "load",
+      "suite_code": "i02-load",
+      "mode": "not_configured",
+      "reason": "Explicit I02 load suites are not authored yet."
+    }
+  ]
+}

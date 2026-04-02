@@ -1,0 +1,147 @@
+{
+  "suite_code": "i02-local-runtime",
+  "module_code": "I02",
+  "description": "Validates the rebuilt I02 public purchase and owner bootstrap gateway threads on the local certification stack.",
+  "setup_sql_file": "testing/gateway/fixtures/i02/suite_setup_plan.sql",
+  "cases": [
+    {
+      "case_id": "i02-capture-intent-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/client-owner-provision",
+      "body": {
+        "action": "capture_intent",
+        "company_name": "A"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i02-capture-intent-accepted",
+      "setup_sql_file": "testing/gateway/fixtures/i02/capture_intent_setup.sql",
+      "teardown_sql_file": "testing/gateway/fixtures/i02/capture_intent_cleanup.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/client-owner-provision",
+      "body": {
+        "action": "capture_intent",
+        "request_idempotency_key": "{{I02_REQUEST_KEY}}",
+        "company_name": "{{I02_COMPANY_NAME}}",
+        "legal_name": "{{I02_LEGAL_NAME}}",
+        "primary_contact_name": "{{I02_PRIMARY_CONTACT_NAME}}",
+        "primary_work_email": "{{I02_PRIMARY_WORK_EMAIL}}",
+        "primary_mobile": "{{I02_PRIMARY_MOBILE}}",
+        "selected_plan_code": "{{I02_SELECTED_PLAN_CODE}}",
+        "estimated_employee_count": 12,
+        "modules_of_interest": ["payroll_core"]
+      },
+      "expect_status": 202,
+      "expect_contains": "provision_request_id"
+    },
+    {
+      "case_id": "i02-activate-after-purchase-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/client-owner-provision",
+      "body": {
+        "action": "activate_after_purchase",
+        "request_key": "i02-cert-intent-001"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i02-activate-after-purchase-success",
+      "setup_sql_file": "testing/gateway/fixtures/i02/activate_after_purchase_setup.sql",
+      "teardown_sql_file": "testing/gateway/fixtures/i02/activate_after_purchase_cleanup.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/client-owner-provision",
+      "body": {
+        "action": "activate_after_purchase",
+        "request_key": "{{I02_REQUEST_KEY}}",
+        "purchase_activation_token": "{{I02_PURCHASE_ACTIVATION_TOKEN}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "credential_setup\":{\"token\""
+    },
+    {
+      "case_id": "i02-initiate-checkout-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/public-client-purchase",
+      "body": {
+        "action": "initiate_checkout"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i02-initiate-checkout-success",
+      "setup_sql_file": "testing/gateway/fixtures/i02/initiate_checkout_setup.sql",
+      "teardown_sql_file": "testing/gateway/fixtures/i02/initiate_checkout_cleanup.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/public-client-purchase",
+      "body": {
+        "action": "initiate_checkout",
+        "request_key": "{{I02_REQUEST_KEY}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "purchase_activation_token"
+    },
+    {
+      "case_id": "i02-resolve-checkout-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/public-client-purchase",
+      "body": {
+        "action": "resolve_checkout"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i02-resolve-checkout-success",
+      "setup_sql_file": "testing/gateway/fixtures/i02/resolve_checkout_setup.sql",
+      "teardown_sql_file": "testing/gateway/fixtures/i02/resolve_checkout_cleanup.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/public-client-purchase",
+      "body": {
+        "action": "resolve_checkout",
+        "request_key": "{{I02_REQUEST_KEY}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "purchase_activation_token"
+    },
+    {
+      "case_id": "i02-webhook-signature-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/public-client-purchase-webhook",
+      "body": {},
+      "expect_status": 401,
+      "expect_contains": "WEBHOOK_SIGNATURE_REQUIRED"
+    },
+    {
+      "case_id": "i02-credential-bootstrap-validation-error",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/client-owner-credential-bootstrap",
+      "body": {
+        "action": "complete_credential_setup",
+        "credential_setup_token": "short",
+        "password": "tiny"
+      },
+      "expect_status": 400,
+      "expect_contains": "VALIDATION_ERROR"
+    },
+    {
+      "case_id": "i02-credential-bootstrap-success",
+      "setup_sql_file": "testing/gateway/fixtures/i02/credential_bootstrap_setup.sql",
+      "teardown_sql_file": "testing/gateway/fixtures/i02/credential_bootstrap_cleanup.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/client-owner-credential-bootstrap",
+      "body": {
+        "action": "complete_credential_setup",
+        "credential_setup_token": "{{I02_CREDENTIAL_SETUP_TOKEN}}",
+        "password": "Owner@12345",
+        "display_name": "I02 Certified Owner"
+      },
+      "expect_status": 200,
+      "expect_contains": "ready_for_signin"
+    }
+  ]
+}
+

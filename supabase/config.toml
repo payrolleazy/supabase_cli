@@ -408,4 +408,14 @@ verify_jwt = false
 
 [functions.identity-signin]
 verify_jwt = false
+[functions.client-owner-credential-bootstrap]
+verify_jwt = false
 
+[functions.public-client-purchase]
+verify_jwt = false
+
+[functions.client-owner-provision]
+verify_jwt = false
+
+[functions.public-client-purchase-webhook]
+verify_jwt = false

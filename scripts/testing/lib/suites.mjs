@@ -41,16 +41,100 @@ function parseTap(output) {
   return { ok, planned, executed, notOkLines, lines };
 }
 
+async function resolveLocalDbContainer(env) {
+  const requested = env.LOCAL_DB_CONTAINER?.trim();
+  const list = await runCommand("docker", ["ps", "--format", "{{.Names}}"]); 
+  if (list.code !== 0) {
+    throw new Error(`Unable to inspect local Docker containers. ${list.stderr || list.stdout}`.trim());
+  }
+
+  const dbContainers = list.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((name) => /^supabase_db_/i.test(name));
+
+  if (requested && dbContainers.includes(requested)) {
+    return requested;
+  }
+
+  if (dbContainers.length === 1) {
+    return dbContainers[0];
+  }
+
+  throw new Error(
+    requested
+      ? `Configured local database container '${requested}' was not found. Active Supabase DB containers: ${dbContainers.join(", ") || "none"}.`
+      : `Unable to resolve the local database container automatically. Active Supabase DB containers: ${dbContainers.join(", ") || "none"}.`,
+  );
+}
+
+async function resolveTestingEnv(env = getTestingEnv()) {
+  return {
+    ...env,
+    LOCAL_DB_CONTAINER: await resolveLocalDbContainer(env),
+  };
+}
+
+function parseJsonTail(output, label) {
+  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return {};
+
+  const tail = lines.at(-1);
+  try {
+    const parsed = JSON.parse(tail);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`${label} returned a non-object JSON payload.`);
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`${label} did not return a JSON object tail.\n${output}\n${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function resolveSqlHookSource(hook, context) {
+  if (hook.setup_sql_file || hook.teardown_sql_file) {
+    const relativePath = hook.setup_sql_file || hook.teardown_sql_file;
+    const filePath = path.join(repoRoot, relativePath);
+    const content = await readFile(filePath, "utf8");
+    return replaceTokens(content, context);
+  }
+
+  if (hook.setup_sql || hook.teardown_sql) {
+    return replaceTokens(hook.setup_sql || hook.teardown_sql, context);
+  }
+
+  return null;
+}
+
+async function runSqlHook({ env, hook, context, label }) {
+  const sql = await resolveSqlHookSource(hook, context);
+  if (!sql) return {};
+
+  const result = await runCommand(
+    "docker",
+    ["exec", "-i", env.LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-t", "-A", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"],
+    { input: sql },
+  );
+
+  if (result.code !== 0) {
+    throw new Error(`${label} failed.\n${result.stderr || result.stdout}`);
+  }
+
+  return parseJsonTail(result.stdout, label);
+}
+
 export async function runSmokeSuite({ env = getTestingEnv() } = {}) {
   printSection("Smoke");
-  const dbReady = await runCommand("docker", ["exec", env.LOCAL_DB_CONTAINER, "pg_isready", "-U", "postgres", "-d", "postgres"]);
+  const resolvedEnv = await resolveTestingEnv(env);
+  const dbReady = await runCommand("docker", ["exec", resolvedEnv.LOCAL_DB_CONTAINER, "pg_isready", "-U", "postgres", "-d", "postgres"]);
   if (dbReady.code !== 0) {
     throw new Error(`Local database container is not ready. ${dbReady.stderr || dbReady.stdout}`.trim());
   }
 
   const checks = [
-    { label: "Studio", url: env.STUDIO_URL, status: 200, retries: 15, delayMs: 1000 },
-    { label: "REST", url: `${env.REST_URL}/`, status: 200, retries: 15, delayMs: 1000 }
+    { label: "Studio", url: resolvedEnv.STUDIO_URL, status: 200, retries: 15, delayMs: 1000 },
+    { label: "REST", url: `${resolvedEnv.REST_URL}/`, status: 200, retries: 15, delayMs: 1000 }
   ];
 
   for (const check of checks) {
@@ -72,6 +156,7 @@ export async function runSmokeSuite({ env = getTestingEnv() } = {}) {
 
 export async function runGatewaySuites({ env = getTestingEnv(), suiteCode, moduleCode } = {}) {
   printSection("Gateway");
+  const resolvedEnv = await resolveTestingEnv(env);
   const suitesRoot = path.join(repoRoot, "testing", "gateway", "suites");
   const suiteFiles = await listFilesRecursive(suitesRoot, (targetPath) => targetPath.endsWith(".json"));
   if (suiteFiles.length === 0) {
@@ -99,33 +184,82 @@ export async function runGatewaySuites({ env = getTestingEnv(), suiteCode, modul
 
   for (const suite of filtered) {
     console.log(`Suite ${suite.suite_code}: ${suite.description}`);
-    for (const testCase of suite.cases ?? []) {
-      const resolved = replaceTokens(testCase, env);
-      const requestOptions = {
-        method: resolved.method ?? "GET",
-        headers: resolved.headers ?? {}
+    let suiteContext = { ...resolvedEnv };
+    if (suite.setup_sql || suite.setup_sql_file) {
+      suiteContext = {
+        ...suiteContext,
+        ...(await runSqlHook({
+          env: resolvedEnv,
+          hook: suite,
+          context: suiteContext,
+          label: `Gateway suite ${suite.suite_code} setup`,
+        })),
       };
-      if (resolved.body) {
-        requestOptions.body = typeof resolved.body === "string" ? resolved.body : JSON.stringify(resolved.body);
-        if (!requestOptions.headers["Content-Type"]) {
-          requestOptions.headers["Content-Type"] = "application/json";
+    }
+
+    try {
+      for (const testCase of suite.cases ?? []) {
+        let caseContext = { ...suiteContext };
+        if (testCase.setup_sql || testCase.setup_sql_file) {
+          caseContext = {
+            ...caseContext,
+            ...(await runSqlHook({
+              env: resolvedEnv,
+              hook: testCase,
+              context: caseContext,
+              label: `Gateway case ${testCase.case_id} setup`,
+            })),
+          };
+        }
+
+        try {
+          const resolved = replaceTokens(testCase, caseContext);
+          const requestOptions = {
+            method: resolved.method ?? "GET",
+            headers: resolved.headers ?? {}
+          };
+          if (resolved.body) {
+            requestOptions.body = typeof resolved.body === "string" ? resolved.body : JSON.stringify(resolved.body);
+            if (!requestOptions.headers["Content-Type"]) {
+              requestOptions.headers["Content-Type"] = "application/json";
+            }
+          }
+          const response = await fetch(resolved.url, requestOptions);
+          const responseText = await response.text();
+          if (response.status !== resolved.expect_status) {
+            throw new Error(`Gateway case ${resolved.case_id} expected ${resolved.expect_status} but got ${response.status} for ${resolved.url}`);
+          }
+          if (resolved.expect_contains && !responseText.includes(resolved.expect_contains)) {
+            throw new Error(`Gateway case ${resolved.case_id} did not include expected text '${resolved.expect_contains}'.`);
+          }
+          console.log(`PASS ${resolved.case_id} ${resolved.url} -> ${response.status}`);
+        } finally {
+          if (testCase.teardown_sql || testCase.teardown_sql_file) {
+            await runSqlHook({
+              env: resolvedEnv,
+              hook: { teardown_sql: testCase.teardown_sql, teardown_sql_file: testCase.teardown_sql_file },
+              context: caseContext,
+              label: `Gateway case ${testCase.case_id} teardown`,
+            });
+          }
         }
       }
-      const response = await fetch(resolved.url, requestOptions);
-      const responseText = await response.text();
-      if (response.status !== resolved.expect_status) {
-        throw new Error(`Gateway case ${resolved.case_id} expected ${resolved.expect_status} but got ${response.status} for ${resolved.url}`);
+    } finally {
+      if (suite.teardown_sql || suite.teardown_sql_file) {
+        await runSqlHook({
+          env: resolvedEnv,
+          hook: { teardown_sql: suite.teardown_sql, teardown_sql_file: suite.teardown_sql_file },
+          context: suiteContext,
+          label: `Gateway suite ${suite.suite_code} teardown`,
+        });
       }
-      if (resolved.expect_contains && !responseText.includes(resolved.expect_contains)) {
-        throw new Error(`Gateway case ${resolved.case_id} did not include expected text '${resolved.expect_contains}'.`);
-      }
-      console.log(`PASS ${resolved.case_id} ${resolved.url} -> ${response.status}`);
     }
   }
 }
 
 export async function runPgTapSuites({ env = getTestingEnv(), moduleCode } = {}) {
   printSection("pgTAP");
+  const resolvedEnv = await resolveTestingEnv(env);
   const testsRoot = path.join(repoRoot, "supabase", "tests", "pgtap");
   const testFiles = await listFilesRecursive(testsRoot, (targetPath) => targetPath.endsWith(".sql"));
   const filtered = testFiles.filter((filePath) => {
@@ -140,7 +274,7 @@ export async function runPgTapSuites({ env = getTestingEnv(), moduleCode } = {})
 
   for (const filePath of filtered) {
     const sql = await readFile(filePath, "utf8");
-    const result = await runCommand("docker", ["exec", "-i", env.LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-f", "-"], { input: sql });
+    const result = await runCommand("docker", ["exec", "-i", resolvedEnv.LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-f", "-"], { input: sql });
     if (result.code !== 0) {
       throw new Error(`pgTAP SQL execution failed for ${path.basename(filePath)}\n${result.stderr || result.stdout}`);
     }
