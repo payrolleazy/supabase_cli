@@ -1,4 +1,4 @@
-﻿name: Deploy Payrolleazy Supabase Changes
+name: Deploy Payrolleazy Supabase Changes
 
 on:
   workflow_dispatch:
@@ -27,6 +27,9 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Materialize local edge env
+        run: cp supabase/functions/local-runtime.env.example supabase/functions/.env
 
       - name: Start local Supabase stack
         run: supabase start
