@@ -1,0 +1,117 @@
+{
+  "suite_code": "i05-gateway-runtime",
+  "module_code": "I05",
+  "description": "Validates the I05 application-gateway proof operations on the local certification stack.",
+  "setup_http": {
+    "method": "POST",
+    "url": "{{API_URL}}/auth/v1/signup",
+    "headers": {
+      "apikey": "{{SUPABASE_ANON_KEY}}",
+      "Authorization": "Bearer {{SUPABASE_ANON_KEY}}"
+    },
+    "body": {
+      "email": "i05.gateway.{{RUN_ID}}@example.test",
+      "password": "GatewayPass@12345",
+      "data": {
+        "full_name": "I05 Gateway User {{RUN_ID}}"
+      }
+    },
+    "expect_status": 200,
+    "response_tokens": {
+      "I05_GATEWAY_ACCESS_TOKEN": "access_token",
+      "I05_GATEWAY_USER_ID": "user.id",
+      "I05_GATEWAY_EMAIL": "user.email"
+    }
+  },
+  "setup_sql_file": "testing/gateway/fixtures/i05/suite_setup_seed_actor.sql",
+  "teardown_sql_file": "testing/gateway/fixtures/i05/suite_teardown_cleanup.sql",
+  "cases": [
+    {
+      "case_id": "i05-read-bucket-catalog-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I05_GATEWAY_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i05_proof_read_bucket_catalog",
+        "route_tenant_id": "{{I05_TENANT_ID}}",
+        "idempotency_key": "i05-{{RUN_ID}}-read-buckets",
+        "payload": {}
+      },
+      "expect_status": 200,
+      "expect_contains": "i05_proof_documents"
+    },
+    {
+      "case_id": "i05-get-document-access-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I05_GATEWAY_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i05_proof_action_get_document_access",
+        "route_tenant_id": "{{I05_TENANT_ID}}",
+        "idempotency_key": "i05-{{RUN_ID}}-get-access",
+        "payload": {
+          "document_id": "{{I05_DOCUMENT_ID}}"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "{{I05_DOCUMENT_ID}}"
+    },
+    {
+      "case_id": "i05-mutate-document-binding-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I05_GATEWAY_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i05_proof_mutate_document_binding",
+        "route_tenant_id": "{{I05_TENANT_ID}}",
+        "idempotency_key": "i05-{{RUN_ID}}-bind-document",
+        "payload": {
+          "document_id": "{{I05_DOCUMENT_ID}}",
+          "target_entity_code": "i05_proof_case",
+          "target_key": "{{RUN_ID}}",
+          "relation_purpose": "attachment"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "i05_proof_case"
+    },
+    {
+      "case_id": "i05-read-document-bindings-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I05_GATEWAY_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i05_proof_read_document_bindings",
+        "route_tenant_id": "{{I05_TENANT_ID}}",
+        "idempotency_key": "i05-{{RUN_ID}}-read-bindings",
+        "payload": {}
+      },
+      "expect_status": 200,
+      "expect_contains": "i05_proof_case"
+    },
+    {
+      "case_id": "i05-read-document-catalog-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I05_GATEWAY_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i05_proof_read_document_catalog",
+        "route_tenant_id": "{{I05_TENANT_ID}}",
+        "idempotency_key": "i05-{{RUN_ID}}-read-documents",
+        "payload": {}
+      },
+      "expect_status": 200,
+      "expect_contains": "i05-proof-runtime.pdf"
+    }
+  ]
+}

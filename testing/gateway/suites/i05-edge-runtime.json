@@ -1,0 +1,90 @@
+{
+  "suite_code": "i05-edge-runtime",
+  "module_code": "I05",
+  "description": "Validates the public I05 document edge threads on the local certification stack.",
+  "setup_http": {
+    "method": "POST",
+    "url": "{{API_URL}}/auth/v1/signup",
+    "headers": {
+      "apikey": "{{SUPABASE_ANON_KEY}}",
+      "Authorization": "Bearer {{SUPABASE_ANON_KEY}}"
+    },
+    "body": {
+      "email": "i05.edge.{{RUN_ID}}@example.test",
+      "password": "GatewayPass@12345",
+      "data": {
+        "full_name": "I05 Edge User {{RUN_ID}}"
+      }
+    },
+    "expect_status": 200,
+    "response_tokens": {
+      "I05_EDGE_ACCESS_TOKEN": "access_token",
+      "I05_EDGE_USER_ID": "user.id",
+      "I05_EDGE_EMAIL": "user.email"
+    }
+  },
+  "setup_sql_file": "testing/gateway/fixtures/i05/suite_setup_seed_actor.sql",
+  "teardown_sql_file": "testing/gateway/fixtures/i05/suite_teardown_cleanup.sql",
+  "cases": [
+    {
+      "case_id": "i05-document-upload-intent-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/document-upload-intent",
+      "body": {
+        "tenant_id": "{{I05_TENANT_ID}}",
+        "document_class_code": "i05_proof_employee_document",
+        "original_file_name": "i05-intent.pdf",
+        "content_type": "application/pdf"
+      },
+      "expect_status": 401,
+      "expect_contains": "AUTH_REQUIRED"
+    },
+    {
+      "case_id": "i05-document-upload-intent-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/document-upload-intent",
+      "headers": {
+        "Authorization": "Bearer {{I05_EDGE_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "tenant_id": "{{I05_TENANT_ID}}",
+        "document_class_code": "i05_proof_employee_document",
+        "original_file_name": "i05-intent.pdf",
+        "content_type": "application/pdf",
+        "expected_size_bytes": 128
+      },
+      "expect_status": 200,
+      "expect_contains": "upload_intent_id"
+    },
+    {
+      "case_id": "i05-document-upload-complete-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/document-upload-complete",
+      "body": {
+        "upload_intent_id": "11111111-1111-1111-1111-111111111111"
+      },
+      "expect_status": 401,
+      "expect_contains": "AUTH_REQUIRED"
+    },
+    {
+      "case_id": "i05-document-access-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/document-access",
+      "headers": {
+        "Authorization": "Bearer {{I05_EDGE_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "document_id": "{{I05_DOCUMENT_ID}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "\"delivery_mode\":\"edge_stream\""
+    },
+    {
+      "case_id": "i05-document-stream-auth-required",
+      "method": "GET",
+      "url": "{{FUNCTIONS_URL}}/document-stream?document_id={{I05_DOCUMENT_ID}}",
+      "expect_status": 401,
+      "expect_contains": "AUTH_REQUIRED"
+    }
+  ]
+}

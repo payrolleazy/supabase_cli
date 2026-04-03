@@ -422,3 +422,16 @@ verify_jwt = false
 
 [functions.application-gateway]
 verify_jwt = true
+
+[functions.document-upload-intent]
+verify_jwt = false
+
+[functions.document-upload-complete]
+verify_jwt = false
+
+[functions.document-access]
+verify_jwt = false
+
+[functions.document-stream]
+verify_jwt = false
+
