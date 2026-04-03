@@ -1,0 +1,34 @@
+﻿{
+  "module_code": "I04",
+  "display_name": "I04 Extensible Entity Attributes",
+  "classification": "new_platform_dynamic_attribute_module",
+  "description": "Extensible entity registry, dynamic attribute schema resolution, join profiles, template descriptors, cache maintenance, and proof gateway operations.",
+  "suite_order": [
+    {
+      "suite_type": "smoke",
+      "suite_code": "local-stack-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "pgtap",
+      "suite_code": "i04-core",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "shared-local-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "i04-local-runtime",
+      "mode": "required"
+    },
+    {
+      "suite_type": "load",
+      "suite_code": "i04-load",
+      "mode": "not_configured",
+      "reason": "Explicit I04 load suites are not authored yet."
+    }
+  ]
+}

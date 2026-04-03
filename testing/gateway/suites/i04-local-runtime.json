@@ -1,0 +1,127 @@
+﻿{
+  "suite_code": "i04-local-runtime",
+  "module_code": "I04",
+  "description": "Validates the rebuilt I04 extensible-attributes proof thread on the local certification stack.",
+  "setup_http": {
+    "method": "POST",
+    "url": "{{API_URL}}/auth/v1/signup",
+    "headers": {
+      "apikey": "{{SUPABASE_ANON_KEY}}",
+      "Authorization": "Bearer {{SUPABASE_ANON_KEY}}"
+    },
+    "body": {
+      "email": "i04.{{RUN_ID}}@example.test",
+      "password": "GatewayPass@12345",
+      "data": {
+        "full_name": "I04 Certification User {{RUN_ID}}"
+      }
+    },
+    "expect_status": 200,
+    "response_tokens": {
+      "I04_ACCESS_TOKEN": "access_token",
+      "I04_USER_ID": "user.id",
+      "I04_EMAIL": "user.email"
+    }
+  },
+  "setup_sql_file": "testing/gateway/fixtures/i04/suite_setup_seed_actor.sql",
+  "teardown_sql_file": "testing/gateway/fixtures/i04/suite_teardown_cleanup.sql",
+  "cases": [
+    {
+      "case_id": "i04-get-schema-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I04_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i04_proof_action_get_schema",
+        "route_tenant_id": "{{I04_TENANT_ID}}",
+        "idempotency_key": "i04-{{RUN_ID}}-get-schema",
+        "payload": {
+          "entity_code": "i04_proof_employee_extension",
+          "use_cache": true
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"custom_code\""
+    },
+    {
+      "case_id": "i04-get-join-profile-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I04_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i04_proof_action_get_join_profile",
+        "route_tenant_id": "{{I04_TENANT_ID}}",
+        "idempotency_key": "i04-{{RUN_ID}}-get-join-profile",
+        "payload": {
+          "entity_code": "i04_proof_employee_extension",
+          "join_profile_code": "default_read_profile"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"default_read_profile\""
+    },
+    {
+      "case_id": "i04-get-template-descriptor-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I04_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i04_proof_action_get_template_descriptor",
+        "route_tenant_id": "{{I04_TENANT_ID}}",
+        "idempotency_key": "i04-{{RUN_ID}}-get-template-descriptor",
+        "payload": {
+          "entity_code": "i04_proof_employee_extension",
+          "use_cache": true
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"column_code\":\"custom_code\""
+    },
+    {
+      "case_id": "i04-validate-payload-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I04_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i04_proof_action_validate_payload",
+        "route_tenant_id": "{{I04_TENANT_ID}}",
+        "idempotency_key": "i04-{{RUN_ID}}-validate-payload",
+        "payload": {
+          "entity_code": "i04_proof_employee_extension",
+          "payload": {
+            "custom_code": "EMP-123",
+            "probation_days": 45
+          }
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"attribute_count\":2"
+    },
+    {
+      "case_id": "i04-invalidate-schema-cache-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": {
+        "Authorization": "Bearer {{I04_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "operation_code": "i04_proof_action_invalidate_schema_cache",
+        "route_tenant_id": "{{I04_TENANT_ID}}",
+        "idempotency_key": "i04-{{RUN_ID}}-invalidate-cache",
+        "payload": {
+          "entity_code": "i04_proof_employee_extension"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"deleted_count\":1"
+    }
+  ]
+}
