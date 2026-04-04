@@ -82,6 +82,15 @@ export function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+export function requireBearerToken(req: Request): string {
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    throw new EdgeHttpError("Authorization bearer token is required.", 401, "AUTH_REQUIRED");
+  }
+  return token;
+}
+
 export function requireServiceRoleBearer(req: Request): void {
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -90,3 +99,4 @@ export function requireServiceRoleBearer(req: Request): void {
     throw new EdgeHttpError("Forbidden", 403, "FORBIDDEN");
   }
 }
+

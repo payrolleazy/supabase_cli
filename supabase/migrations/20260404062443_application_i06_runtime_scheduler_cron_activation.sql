@@ -1,0 +1,3 @@
+-- History-alignment stub.
+-- The live migration for this version was already applied directly in supabase_payrolleazy.
+-- The formal SQL backfill for the resulting schema delta is captured by the subsequent db pull stage.

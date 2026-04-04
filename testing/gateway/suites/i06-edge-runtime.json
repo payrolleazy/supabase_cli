@@ -1,0 +1,256 @@
+{
+  "suite_code": "i06-edge-runtime",
+  "module_code": "I06",
+  "description": "Validates all available public I06 exchange edge threads on the local certification stack.",
+  "setup_http": {
+    "method": "POST",
+    "url": "{{API_URL}}/auth/v1/signup",
+    "headers": {
+      "apikey": "{{SUPABASE_ANON_KEY}}",
+      "Authorization": "Bearer {{SUPABASE_ANON_KEY}}"
+    },
+    "body": {
+      "email": "i06.{{RUN_ID}}@example.test",
+      "password": "GatewayPass@12345",
+      "data": {
+        "full_name": "I06 Certification User {{RUN_ID}}"
+      }
+    },
+    "expect_status": 200,
+    "response_tokens": {
+      "I06_ACCESS_TOKEN": "access_token",
+      "I06_USER_ID": "user.id",
+      "I06_EMAIL": "user.email"
+    }
+  },
+  "setup_sql_file": "testing/gateway/fixtures/i06/suite_setup_seed_actor.sql",
+  "teardown_sql_file": "testing/gateway/fixtures/i06/suite_teardown_cleanup.sql",
+  "cases": [
+    {
+      "case_id": "i06-template-generate-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-template-generate",
+      "body": {
+        "tenant_id": "{{I06_TENANT_ID}}",
+        "contract_code": "{{I06_IMPORT_CONTRACT_CODE}}",
+        "format": "csv"
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-template-generate-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-template-generate",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "tenant_id": "{{I06_TENANT_ID}}",
+        "contract_code": "{{I06_IMPORT_CONTRACT_CODE}}",
+        "format": "csv"
+      },
+      "expect_status": 200,
+      "expect_contains": "employee_code,full_name,salary,start_date"
+    },
+    {
+      "case_id": "i06-import-upload-issue-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-upload",
+      "body": {
+        "action": "issue",
+        "tenant_id": "{{I06_TENANT_ID}}",
+        "contract_code": "{{I06_IMPORT_CONTRACT_CODE}}",
+        "source_file_name": "i06-proof-upload.csv",
+        "content_type": "text/csv",
+        "expected_size_bytes": 64
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-import-upload-issue-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-upload",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "action": "issue",
+        "tenant_id": "{{I06_TENANT_ID}}",
+        "contract_code": "{{I06_IMPORT_CONTRACT_CODE}}",
+        "source_file_name": "i06-proof-upload.csv",
+        "content_type": "text/csv",
+        "expected_size_bytes": 64
+      },
+      "expect_status": 200,
+      "expect_contains": "upload_intent_id"
+    },
+    {
+      "case_id": "i06-import-upload-complete-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-upload",
+      "body": {
+        "action": "complete",
+        "upload_intent_id": "11111111-1111-1111-1111-111111111111"
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-import-upload-complete-success",
+      "setup_sql_file": "testing/gateway/fixtures/i06/case_setup_complete_action.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-upload",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "action": "complete",
+        "upload_intent_id": "{{I06_COMPLETE_UPLOAD_INTENT_ID}}",
+        "file_size_bytes": 64
+      },
+      "expect_status": 200,
+      "expect_contains": "document_id"
+    },
+    {
+      "case_id": "i06-import-preview-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-preview",
+      "body": {
+        "import_session_id": "11111111-1111-1111-1111-111111111111",
+        "staged_rows": [
+          {
+            "employee_code": "EMP-010",
+            "full_name": "Alice Example",
+            "salary": 1200,
+            "start_date": "2026-04-01"
+          }
+        ]
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-import-preview-success",
+      "setup_sql_file": "testing/gateway/fixtures/i06/case_setup_uploaded_import.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-preview",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "import_session_id": "{{I06_PREVIEW_IMPORT_SESSION_ID}}",
+        "staged_rows": [
+          {
+            "employee_code": "EMP-010",
+            "full_name": "Alice Example",
+            "salary": 1200,
+            "start_date": "2026-04-01"
+          },
+          {
+            "employee_code": "EMP-011",
+            "full_name": "Bob Example",
+            "salary": 1350,
+            "start_date": "2026-04-02"
+          }
+        ]
+      },
+      "expect_status": 200,
+      "expect_contains": "\"total_rows\":2"
+    },
+    {
+      "case_id": "i06-import-commit-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-commit",
+      "body": {
+        "import_session_id": "11111111-1111-1111-1111-111111111111"
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-import-commit-success",
+      "setup_sql_file": "testing/gateway/fixtures/i06/case_setup_ready_to_commit_import.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-import-commit",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "import_session_id": "{{I06_COMMIT_IMPORT_SESSION_ID}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "\"run_status\":\"queued\""
+    },
+    {
+      "case_id": "i06-export-request-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-export-request",
+      "body": {
+        "tenant_id": "{{I06_TENANT_ID}}",
+        "contract_code": "{{I06_EXPORT_CONTRACT_CODE}}",
+        "request_payload": {
+          "format": "csv"
+        }
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-export-request-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/exchange-export-request",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "body": {
+        "tenant_id": "{{I06_TENANT_ID}}",
+        "contract_code": "{{I06_EXPORT_CONTRACT_CODE}}",
+        "request_payload": {
+          "format": "csv"
+        },
+        "idempotency_key": "i06-{{RUN_ID}}-export-request"
+      },
+      "expect_status": 200,
+      "expect_contains": "\"job_status\":\"queued\""
+    },
+    {
+      "case_id": "i06-export-status-auth-required",
+      "method": "GET",
+      "url": "{{FUNCTIONS_URL}}/exchange-export-status?export_job_id=11111111-1111-1111-1111-111111111111",
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-export-status-success",
+      "setup_sql_file": "testing/gateway/fixtures/i06/case_setup_completed_export.sql",
+      "method": "GET",
+      "url": "{{FUNCTIONS_URL}}/exchange-export-status?export_job_id={{I06_EXPORT_JOB_ID}}",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "\"job_status\":\"completed\""
+    },
+    {
+      "case_id": "i06-export-download-auth-required",
+      "method": "GET",
+      "url": "{{FUNCTIONS_URL}}/exchange-export-download?export_job_id=11111111-1111-1111-1111-111111111111",
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "i06-export-download-success",
+      "setup_sql_file": "testing/gateway/fixtures/i06/case_setup_completed_export.sql",
+      "method": "GET",
+      "url": "{{FUNCTIONS_URL}}/exchange-export-download?export_job_id={{I06_EXPORT_JOB_ID}}",
+      "headers": {
+        "Authorization": "Bearer {{I06_ACCESS_TOKEN}}"
+      },
+      "expect_status": 200,
+      "expect_contains": "\"delivery_mode\":\"signed_url\""
+    }
+  ]
+}
+

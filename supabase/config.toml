@@ -435,3 +435,24 @@ verify_jwt = false
 [functions.document-stream]
 verify_jwt = false
 
+
+[functions.exchange-template-generate]
+verify_jwt = true
+[functions.exchange-import-upload]
+verify_jwt = true
+[functions.exchange-import-preview]
+verify_jwt = true
+[functions.exchange-import-commit]
+verify_jwt = true
+[functions.exchange-export-request]
+verify_jwt = true
+[functions.exchange-export-status]
+verify_jwt = true
+[functions.exchange-export-download]
+verify_jwt = true
+[functions.i06-import-worker]
+verify_jwt = false
+[functions.i06-export-worker]
+verify_jwt = false
+[functions.i06-runtime-orchestrator]
+verify_jwt = false
