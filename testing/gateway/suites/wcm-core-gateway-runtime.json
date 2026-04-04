@@ -1,0 +1,231 @@
+{
+  "suite_code": "wcm-core-gateway-runtime",
+  "module_code": "WCM_CORE",
+  "description": "Validates the full WCM Core application-gateway operation surface on the local certification stack.",
+  "setup_http": {
+    "method": "POST",
+    "url": "{{API_URL}}/auth/v1/signup",
+    "headers": {
+      "apikey": "{{SUPABASE_ANON_KEY}}",
+      "Authorization": "Bearer {{SUPABASE_ANON_KEY}}"
+    },
+    "body": {
+      "email": "wcm.core.{{RUN_ID}}@example.test",
+      "password": "GatewayPass@12345",
+      "data": {
+        "full_name": "WCM Core Certification User {{RUN_ID}}"
+      }
+    },
+    "expect_status": 200,
+    "response_tokens": {
+      "WCM_ACCESS_TOKEN": "access_token",
+      "WCM_USER_ID": "user.id",
+      "WCM_EMAIL": "user.email"
+    }
+  },
+  "setup_sql_file": "testing/gateway/fixtures/wcm_core/suite_setup_seed_actor.sql",
+  "teardown_sql_file": "testing/gateway/fixtures/wcm_core/suite_teardown_cleanup.sql",
+  "cases": [
+    {
+      "case_id": "wcm-application-gateway-auth-required",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "body": {
+        "operation_code": "wcm_read_headcount_summary",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "payload": {}
+      },
+      "expect_status": 401,
+      "expect_contains": "Missing authorization header"
+    },
+    {
+      "case_id": "wcm-register-employee-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_action_register_employee",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-register-employee",
+        "payload": {
+          "employee_code": "WCM-GW-{{RUN_ID}}",
+          "first_name": "Gateway",
+          "last_name": "Employee",
+          "official_email": "wcm.gateway.{{RUN_ID}}@example.test"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "WCM-GW-{{RUN_ID}}"
+    },
+    {
+      "case_id": "wcm-upsert-service-state-success",
+      "setup_sql_file": "testing/gateway/fixtures/wcm_core/case_setup_lookup_gateway_employee.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_action_upsert_service_state",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-upsert-service-state",
+        "payload": {
+          "employee_id": "{{WCM_GATEWAY_EMPLOYEE_ID}}",
+          "joining_date": "2025-01-15",
+          "service_state": "active",
+          "employment_status": "active",
+          "position_id": 902,
+          "last_billable": true,
+          "state_notes": { "certification_module": "WCM_CORE", "run_id": "{{RUN_ID}}", "seed": "gateway_service_state" },
+          "event_reason": "gateway_service_state_seed",
+          "source_module": "WCM_CORE"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"service_state\":\"active\""
+    },
+    {
+      "case_id": "wcm-read-employee-catalog-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_read_employee_catalog",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-read-employee-catalog",
+        "payload": { "filters": { "employee_code": "WCM-GW-{{RUN_ID}}" }, "limit": 25 }
+      },
+      "expect_status": 200,
+      "expect_contains": "WCM-GW-{{RUN_ID}}"
+    },
+    {
+      "case_id": "wcm-read-headcount-summary-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_read_headcount_summary",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-read-headcount-summary",
+        "payload": { "limit": 1 }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"employee_count\":2"
+    },
+    {
+      "case_id": "wcm-read-service-state-overview-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_read_service_state_overview",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-read-service-state-overview",
+        "payload": { "filters": { "employee_code": "WCM-GW-{{RUN_ID}}" }, "limit": 25 }
+      },
+      "expect_status": 200,
+      "expect_contains": "WCM-GW-{{RUN_ID}}"
+    },
+    {
+      "case_id": "wcm-request-resignation-success",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_action_request_resignation",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-request-resignation",
+        "payload": {
+          "employee_id": "{{WCM_BASE_EMPLOYEE_ID}}",
+          "resignation_date": "2026-04-10",
+          "tentative_leaving_date": "2026-05-10",
+          "separation_reason": "career_transition",
+          "comments": "WCM certification resignation request"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"request_status\":\"pending_approval\""
+    },
+    {
+      "case_id": "wcm-read-resignation-request-catalog-success",
+      "setup_sql_file": "testing/gateway/fixtures/wcm_core/case_setup_lookup_request.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_read_resignation_request_catalog",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-read-request-catalog",
+        "payload": { "filters": { "request_id": "{{WCM_REQUEST_ID}}" }, "limit": 25 }
+      },
+      "expect_status": 200,
+      "expect_contains": "{{WCM_REQUEST_ID}}"
+    },
+    {
+      "case_id": "wcm-process-resignation-approval-success",
+      "setup_sql_file": "testing/gateway/fixtures/wcm_core/case_setup_lookup_request.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_action_process_resignation_approval",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-approve-resignation",
+        "payload": {
+          "request_id": "{{WCM_REQUEST_ID}}",
+          "approved_last_working_day": "2026-05-10",
+          "waive_notice_shortfall": false,
+          "remarks": "WCM certification approval"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"request_status\":\"approved_pending_clearance\""
+    },
+    {
+      "case_id": "wcm-preview-resignation-rollback-success",
+      "setup_sql_file": "testing/gateway/fixtures/wcm_core/case_setup_lookup_request.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_action_preview_resignation_rollback",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-preview-rollback",
+        "payload": { "request_id": "{{WCM_REQUEST_ID}}" }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"decision_code\":\"signal_only_reversal\""
+    },
+    {
+      "case_id": "wcm-read-lifecycle-rollback-audit-success",
+      "setup_sql_file": "testing/gateway/fixtures/wcm_core/case_setup_seed_rollback_audit.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_read_lifecycle_rollback_audit",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-read-rollback-audit",
+        "payload": { "filters": { "request_id": "{{WCM_REQUEST_ID}}" }, "limit": 25 }
+      },
+      "expect_status": 200,
+      "expect_contains": "signal_only_reversal"
+    },
+    {
+      "case_id": "wcm-withdraw-resignation-success",
+      "setup_sql_file": "testing/gateway/fixtures/wcm_core/case_setup_lookup_request.sql",
+      "method": "POST",
+      "url": "{{FUNCTIONS_URL}}/application-gateway",
+      "headers": { "Authorization": "Bearer {{WCM_ACCESS_TOKEN}}" },
+      "body": {
+        "operation_code": "wcm_action_withdraw_resignation",
+        "route_tenant_id": "{{WCM_TENANT_ID}}",
+        "idempotency_key": "wcm-{{RUN_ID}}-withdraw-resignation",
+        "payload": {
+          "request_id": "{{WCM_REQUEST_ID}}",
+          "reason": "WCM certification withdrawal"
+        }
+      },
+      "expect_status": 200,
+      "expect_contains": "\"request_status\":\"withdrawn\""
+    }
+  ]
+}
