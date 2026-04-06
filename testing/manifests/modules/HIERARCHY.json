@@ -1,0 +1,34 @@
+{
+  "module_code": "HIERARCHY",
+  "display_name": "Hierarchy Organization Position And Occupancy",
+  "classification": "organization_hierarchy_module",
+  "description": "Hierarchy baseline plus maintenance, cached org-chart runtime, observability, and full application-gateway operation coverage.",
+  "suite_order": [
+    {
+      "suite_type": "smoke",
+      "suite_code": "local-stack-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "pgtap",
+      "suite_code": "hierarchy",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "shared-local-health",
+      "mode": "required"
+    },
+    {
+      "suite_type": "gateway",
+      "suite_code": "hierarchy-gateway-runtime",
+      "mode": "required"
+    },
+    {
+      "suite_type": "load",
+      "suite_code": "hierarchy-load",
+      "mode": "not_configured",
+      "reason": "Explicit HIERARCHY load suites are not authored yet."
+    }
+  ]
+}

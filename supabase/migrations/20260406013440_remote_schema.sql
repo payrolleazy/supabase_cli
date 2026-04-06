@@ -1,0 +1,7 @@
+CREATE UNIQUE INDEX idx_platform_rm_hierarchy_org_chart_cached_store_tenant_positio ON public.platform_rm_hierarchy_org_chart_cached_store USING btree (tenant_id, position_id);
+
+CREATE INDEX idx_platform_rm_hierarchy_org_chart_cached_store_tenant_status ON public.platform_rm_hierarchy_org_chart_cached_store USING btree (tenant_id, position_status, position_code);
+
+CREATE UNIQUE INDEX idx_platform_rm_refresh_overview_module_code ON public.platform_rm_refresh_overview USING btree (module_code);
+
+

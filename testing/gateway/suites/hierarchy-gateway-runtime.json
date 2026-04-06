@@ -1,0 +1,397 @@
+{
+    "suite_code":  "hierarchy-gateway-runtime",
+    "module_code":  "HIERARCHY",
+    "description":  "Validates the full HIERARCHY application-gateway surface on the local certification stack.",
+    "setup_http":  {
+                       "method":  "POST",
+                       "url":  "{{API_URL}}/auth/v1/signup",
+                       "headers":  {
+                                       "apikey":  "{{SUPABASE_ANON_KEY}}",
+                                       "Authorization":  "Bearer {{SUPABASE_ANON_KEY}}"
+                                   },
+                       "body":  {
+                                    "email":  "hierarchy.{{RUN_ID}}@example.test",
+                                    "password":  "GatewayPass@12345",
+                                    "data":  {
+                                                 "full_name":  "Hierarchy Certification User {{RUN_ID}}"
+                                             }
+                                },
+                       "expect_status":  200,
+                       "response_tokens":  {
+                                               "HIER_ACCESS_TOKEN":  "access_token",
+                                               "HIER_USER_ID":  "user.id",
+                                               "HIER_EMAIL":  "user.email"
+                                           }
+                   },
+    "setup_sql_file":  "testing/gateway/fixtures/hierarchy/suite_setup_seed_actor.sql",
+    "teardown_sql_file":  "testing/gateway/fixtures/hierarchy/suite_teardown_cleanup.sql",
+    "cases":  [
+                  {
+                      "case_id":  "hierarchy-application-gateway-auth-required",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_position_group_catalog",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "position_group_code":  "hier-base-grp-{{RUN_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  401,
+                      "expect_contains":  "Missing authorization header"
+                  },
+                  {
+                      "case_id":  "hierarchy-register-position-group-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_register_position_group",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-register-position-group",
+                                   "payload":  {
+                                                   "position_group_code":  "hier-extra-grp-{{RUN_ID}}",
+                                                   "position_group_name":  "Hierarchy Extra Group {{RUN_ID}}",
+                                                   "group_status":  "active",
+                                                   "description":  "HIERARCHY certification extra group"
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-grp-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-register-position-success",
+                      "setup_sql_file":  "testing/gateway/fixtures/hierarchy/case_setup_lookup_extra_group.sql",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_register_position",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-register-position",
+                                   "payload":  {
+                                                   "position_code":  "hier-extra-pos-{{RUN_ID}}",
+                                                   "position_name":  "Hierarchy Extra Position {{RUN_ID}}",
+                                                   "position_group_id":  "{{HIER_EXTRA_GROUP_ID}}",
+                                                   "reporting_position_id":  "{{HIER_ROOT_POSITION_ID}}",
+                                                   "position_status":  "active",
+                                                   "effective_start_date":  "2025-01-01"
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-pos-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-upsert-position-occupancy-success",
+                      "setup_sql_file":  "testing/gateway/fixtures/hierarchy/case_setup_lookup_extra_position.sql",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_upsert_position_occupancy",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-upsert-occupancy",
+                                   "payload":  {
+                                                   "employee_id":  "{{HIER_EXTRA_EMPLOYEE_ID}}",
+                                                   "position_id":  "{{HIER_EXTRA_POSITION_ID}}",
+                                                   "occupancy_role":  "primary",
+                                                   "effective_start_date":  "2025-02-01",
+                                                   "occupancy_reason":  "hierarchy_certification_seed",
+                                                   "event_details":  {
+                                                                         "certification_module":  "HIERARCHY",
+                                                                         "run_id":  "{{RUN_ID}}",
+                                                                         "fixture":  "extra_occupancy"
+                                                                     }
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "\"occupancy_role\":\"primary\""
+                  },
+                  {
+                      "case_id":  "hierarchy-read-position-group-catalog-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_position_group_catalog",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-position-group-catalog",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "position_group_code":  "hier-extra-grp-{{RUN_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-grp-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-position-catalog-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_position_catalog",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-position-catalog",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "position_code":  "hier-extra-pos-{{RUN_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-pos-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-org-chart-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_org_chart",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-org-chart",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "position_id":  "{{HIER_EXTRA_POSITION_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-pos-{{RUN_ID}}",
+                      "setup_sql_file":  "testing/gateway/fixtures/hierarchy/case_setup_lookup_extra_position.sql"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-operational-occupancy-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_operational_occupancy",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-operational-occupancy",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "employee_code":  "HIER-EXT-{{RUN_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "HIER-EXT-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-get-operational-occupant-success",
+                      "setup_sql_file":  "testing/gateway/fixtures/hierarchy/case_setup_lookup_extra_position.sql",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_get_operational_occupant",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-get-operational-occupant",
+                                   "payload":  {
+                                                   "position_id":  "{{HIER_EXTRA_POSITION_ID}}"
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "HIER-EXT-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-get-manager-resolution-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_get_manager_resolution",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-get-manager-resolution",
+                                   "payload":  {
+                                                   "employee_id":  "{{HIER_EXTRA_EMPLOYEE_ID}}"
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "HIER-MGR-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-team-scope-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_team_scope",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-team-scope",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "manager_employee_id":  "{{HIER_MANAGER_EMPLOYEE_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "HIER-EXT-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-position-history-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_position_history",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-position-history",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "employee_id":  "{{HIER_EXTRA_EMPLOYEE_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "HIER-EXT-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-cached-org-chart-success",
+                      "setup_sql_file":  "testing/gateway/fixtures/hierarchy/case_setup_refresh_cache.sql",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_cached_org_chart",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-cached-org-chart",
+                                   "payload":  {
+                                                   "filters":  {
+                                                                   "position_code":  "hier-extra-pos-{{RUN_ID}}"
+                                                               },
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-pos-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-read-metrics-summary-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_metrics_summary",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-metrics-summary",
+                                   "payload":  {
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "\"total_position_count\":3"
+                  },
+                  {
+                      "case_id":  "hierarchy-search-positions-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_search_positions",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-search-positions",
+                                   "payload":  {
+                                                   "search_text":  "hier-extra-pos-{{RUN_ID}}",
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "hier-extra-pos-{{RUN_ID}}"
+                  },
+                  {
+                      "case_id":  "hierarchy-action-health-check-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_health_check",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-health-check",
+                                   "payload":  {
+
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "\"health_status\":\"healthy\""
+                  },
+                  {
+                      "case_id":  "hierarchy-read-health-status-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_read_health_status",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-read-health-status",
+                                   "payload":  {
+                                                   "limit":  25
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "\"health_status\":\"healthy\""
+                  },
+                  {
+                      "case_id":  "hierarchy-action-self-test-success",
+                      "method":  "POST",
+                      "url":  "{{FUNCTIONS_URL}}/application-gateway",
+                      "headers":  {
+                                      "Authorization":  "Bearer {{HIER_ACCESS_TOKEN}}"
+                                  },
+                      "body":  {
+                                   "operation_code":  "hierarchy_action_self_test",
+                                   "route_tenant_id":  "{{HIER_TENANT_ID}}",
+                                   "idempotency_key":  "hier-{{RUN_ID}}-self-test",
+                                   "payload":  {
+
+                                               }
+                               },
+                      "expect_status":  200,
+                      "expect_contains":  "\"health_status\":\"healthy\""
+                  }
+              ]
+}

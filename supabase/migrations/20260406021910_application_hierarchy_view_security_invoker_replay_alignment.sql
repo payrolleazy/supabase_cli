@@ -1,0 +1,9 @@
+alter view public.platform_rm_hierarchy_position_group_catalog set (security_invoker = true);
+alter view public.platform_rm_hierarchy_position_catalog set (security_invoker = true);
+alter view public.platform_rm_hierarchy_org_chart set (security_invoker = true);
+alter view public.platform_rm_hierarchy_operational_occupancy set (security_invoker = true);
+alter view public.platform_rm_hierarchy_team_scope set (security_invoker = true);
+alter view public.platform_rm_hierarchy_org_chart_cached set (security_invoker = true);
+alter view public.platform_rm_hierarchy_position_history set (security_invoker = true);
+alter view public.platform_rm_hierarchy_metrics_summary set (security_invoker = true);
+alter view public.platform_rm_hierarchy_health_status set (security_invoker = true);

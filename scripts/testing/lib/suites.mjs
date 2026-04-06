@@ -69,8 +69,8 @@ function parseTap(output) {
   const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const planLine = lines.find((line) => /^1\.\.[0-9]+$/.test(line));
   const planned = planLine ? Number(planLine.split("..", 2)[1]) : null;
-  const okLines = lines.filter((line) => /^ok\b/i.test(line));
-  const notOkLines = lines.filter((line) => /^not ok\b/i.test(line));
+  const okLines = lines.filter((line) => /^ok\s+\d+\b/i.test(line));
+  const notOkLines = lines.filter((line) => /^not ok\s+\d+\b/i.test(line));
   const executed = okLines.length + notOkLines.length;
   const ok = planned !== null && notOkLines.length === 0 && executed === planned;
   return { ok, planned, executed, notOkLines, lines };
